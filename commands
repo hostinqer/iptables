@@ -1,0 +1,94 @@
+Управление iptables
+service iptables stop - Остановка
+service iptables start - Запуск
+service iptables restart - Перезагрузка
+service iptables save - Сохранить правила брандмауэра  (CentOS / RHEL / Fedora Linux)
+iptables-save - Сохранить правила
+iptables-save > /root/my.active.firewall.rules - Сохранить правила (в других дистрибутивах)
+
+
+Включение ip forward (трафик меджу интерфейсами):
+echo 1 > /proc/sys/net/ipv4/ip_forward
+sysctl -p
+
+tools:
+iptables -L - вывести список правил
+iptables -S - вывести список правил
+iptables -L -n -v  - вывести список правил (-n не резолвить IP) (-v Отображение подробной информации)
+iptables -L -n -v --line-numbers - просмотр правил с номером строки
+iptables -L INPUT -n -v - просмотра INPUT
+iptables -L OUTPUT -n -v --line-numbers - просмотра OUTPUT
+iptables -L INPUT -n --line-numbers  - просмотр правил с номером строки в INPUT
+iptables -L OUTPUT -n --line-numbers  - просмотр правил с номером строки в OUTPUT
+iptables -L OUTPUT -n --line-numbers | less - просмотр правил с номером строки в OUTPUT перенаправив вывод в less
+iptables -L OUTPUT -n --line-numbers | grep 8.8.8.8 - просмотр правил с номером строки в OUTPUT грепаем 8.8.8.8
+
+Очистка таблицы filter:
+iptables -F INPUT
+iptables -F OUTPUT
+iptables -F FORWARD
+
+Очистка таблицы nat:
+iptables -t nat -F PREROUTING
+iptables -t nat -F POSTROUTING
+
+Очистка таблицы mangle:
+iptables -t mangle -F PREROUTING
+
+Очистка правил подробно:
+iptables -F - Удаление всех правил (flushing)
+iptables -X - Удаление цепочки
+iptables -t nat -F - Выбрать таблицу и удалить правила
+iptables -t nat -X - Выбрать таблицу и удалить правила
+iptables -t mangle -F - Выбрать таблицу и удалить правила
+iptables -t mangle -X - Выбрать таблицу и удалить правила
+iptables -P INPUT ACCEPT - Установить политику по умолчанию
+iptables -P OUTPUT ACCEPT  - Установить политику по умолчанию
+iptables -P FORWARD ACCEPT  - Установить политику по умолчанию
+
+Чистим ветки логов:
+iptables -F undef_in
+iptables -F undef_out
+iptables -F undef_fw
+iptables -X undef_in
+iptables -X undef_out
+iptables -X undef_fw
+
+Закрываем всё:
+iptables -P INPUT DROP
+iptables -P OUTPUT DROP
+iptables -P FORWARD DROP
+
+Включаем NAT:
+iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+
+Разрешаем принимать трафик на loopback-интерфейсе:
+iptables -A INPUT eth2 -j ACCEPT
+iptables -A INPUT -i eth1 -j ACCEPT
+iptables -A FORWARD -i lo -o eth1 -j ACCEPT$IPT -A FORWARD -i eth2 -o lo -j ACCEPT
+iptables -A FORWARD -i lo -o eth2 -j ACCEPT$IPT -A FORWARD -i eth1 -o lo -j ACCEPT
+iptables -A INPUT -i lo -j ACCEPT
+iptables -A OUTPUT -o lo -j ACCEPT
+
+Разрешение исходящего трафика:
+iptables -A OUTPUT -o eth0 -j ACCEPT
+iptables -A OUTPUT -o eth1 -j ACCEPT
+iptables -A OUTPUT -o eth2 -j ACCEPT
+
+Разрешить соединения, которые инициированы изнутри
+iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+iptables -A FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+Следующими правилами разрешаем коннекты на наш сервер из вне:
+iptables -A INPUT -p udp --dport 33434:33523 -j ACCEPT - Разрешить traceroute
+iptables -A INPUT -p tcp --dport 22 -j ACCEPT - Разрешаем SSH
+iptables -A INPUT -p tcp --dport 10000 -j ACCEPT - Разрешаем webmin
+iptables -A INPUT -i eth0 -p tcp --dport 80 -j ACCEPT - Доступ на http
+
+Проброс RDP на сервер терминалов:
+iptables -t nat -A PREROUTING -p tcp --dport 3389 -i eth0 -j DNAT --to 192.168.0.100
+iptables -A FORWARD -i eth0 -d 192.168.0.100 -p tcp --dport 3389 -j ACCEPT
+
+Выход из локалки на почтовые сервера
+iptables -A FORWARD -d smtp.mail.ru -o eth0 -p tcp -m tcp --dport 25 -j ACCEPT
+iptables -A FORWARD -d smtp.masterhost.ru -o eth0 -p tcp -m tcp --dport 25 -j ACCEPT
