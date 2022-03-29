@@ -92,3 +92,55 @@ iptables -A FORWARD -i eth0 -d 192.168.0.100 -p tcp --dport 3389 -j ACCEPT
 Выход из локалки на почтовые сервера
 iptables -A FORWARD -d smtp.mail.ru -o eth0 -p tcp -m tcp --dport 25 -j ACCEPT
 iptables -A FORWARD -d smtp.masterhost.ru -o eth0 -p tcp -m tcp --dport 25 -j ACCEPT
+
+Заворачиваем трафик на порт сквида:
+iptables -t nat -A PREROUTING -p tcp -m multiport --dport 80,81,82,83,88,8000,8001,8002,8080,8081,3128,9090 -s 0/0 -d 0/0 -j REDIRECT --to-port 3128
+iptables -t nat -A PREROUTING -p udp -m multiport --dport 80,81,82,83,88,8000,8001,8002,8080,8081,3128,9090 -s 0/0 -d 0/0 -j REDIRECT --to-port 3128
+
+Если прокси не установлена,либо нет нужды в использовании SQUID, то просто форвардим нужные порты:
+iptables -A FORWARD -o eth0 -p tcp -m multiport --dport 80,81,82,83,88,8000,8001,8002,8080,8081,3128,9090 -j ACCEPT 
+
+Прячем NAT:
+iptables -t mangle -A PREROUTING -j TTL --ttl-set 64
+iptables -t mangle -A PREROUTING -j RETURN
+
+Все что не разрешено, но ломится отправим в цепочку undef:
+iptables -N undef_in
+iptables -N undef_out
+iptables -N undef_fw
+iptables -A INPUT -i vlan2 -j undef_in
+iptables -A OUTPUT -j undef_out
+iptables -A FORWARD -j undef_fw
+
+Логировать все из цепочки undef:
+iptables -A undef_in -j LOG --log-level info --log-prefix "--- IN --- DROP "
+iptables -A undef_in -j DROP
+iptables -A undef_out -j LOG --log-level info --log-prefix " --- OUT --- DROP "
+iptables -A undef_out -j DROP
+iptables -A undef_fw -j LOG --log-level info --log-prefix "--- FW --- DROP "
+iptables -A undef_fw -j DROP
+
+Антибрут ssh:
+iptables -A INPUT -m state  --state ESTABLISHED,RELATED -j ACCEPT
+iptables -A INPUT -p tcp -m tcp  --dport 22 -m state --state NEW  -m recent --set --name SSH
+iptables -A INPUT -p tcp -m tcp  --dport 22 -m state --state NEW  -m recent --update --seconds 60  --hitcount 4 --rttl --name SSH -j DROP
+iptables -A INPUT -p tcp -m tcp  --dport 22 -m state --state NEW -j ACCEPT
+После этого хосты, пытающиеся перебирать пароль, будут блокироваться: 
+все IP из черного списка будут фиксироваться в файле /proc/net/ipt_recent/SSH
+
+Разрешаем некоторые ICMP-сообщения
+https://ru.wikipedia.org/wiki/ICMP  - icmp-type
+iptables -A INPUT -i eth0 -p icmp -m icmp  --icmp-type 3 -j ACCEPT
+iptables -A INPUT -i eth0 -p icmp -m icmp  --icmp-type 11 -j ACCEPT
+iptables -A INPUT -i eth0 -p icmp -m icmp  --icmp-type 12 -j ACCEPT
+
+open firewall:
+iptables -A INPUT -i lo -j ACCEPT
+iptables -A INPUT -p tcp -m tcp --tcp-ﬂags  SYN,ACK,FIN,RST RST -m limit --limit 1/s -j ACCEPT # Небольшая защита от DoS
+iptables -A INPUT -p all -m state --state  RELATED,ESTABLISHED -j ACCEPT # Разрешаем уже установленные соединения
+iptables -A INPUT -i eth0 -p tcp --dport 22 -j ACCEPT # Разрешаем 22 порт
+iptables -A INPUT -i eth0 -p tcp --dport 80 -j ACCEPT # Разрешаем 80 порт
+iptables -A INPUT -i eth0 -p icmp -m icmp  --icmp-type 3 -j ACCEPT # Разрешаем некоторые ICMP-сообщения
+iptables -A INPUT -i eth0 -p icmp -m icmp  --icmp-type 11 -j ACCEPT # Разрешаем некоторые ICMP-сообщения
+iptables -A INPUT -i eth0 -p icmp -m icmp  --icmp-type 12 -j ACCEPT # Разрешаем некоторые ICMP-сообщения
+iptables -A INPUT DROP
