@@ -1,11 +1,12 @@
 Управление iptables
+```
 service iptables stop - Остановка
 service iptables start - Запуск
 service iptables restart - Перезагрузка
 service iptables save - Сохранить правила брандмауэра  (CentOS / RHEL / Fedora Linux)
 iptables-save - Сохранить правила
 iptables-save > /root/my.active.firewall.rules - Сохранить правила (в других дистрибутивах)
-
+```
 
 Включение ip forward (трафик меджу интерфейсами):
 echo 1 > /proc/sys/net/ipv4/ip_forward
